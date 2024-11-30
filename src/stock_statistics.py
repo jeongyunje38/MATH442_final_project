@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 from datetime import datetime
+from arch import arch_model
 
 from .stock_data import StockData
 from .utils import Utils
@@ -28,6 +29,17 @@ class StockStatistics:
     def calculate_simple_volatility(stock_data: StockData) -> np.float64:
 
         return np.std(StockStatistics.calculate_return(stock_data=stock_data))
+
+    @staticmethod
+    def calculate_volatility_using_GARCH(stock_data: StockData) -> np.float64:
+
+        log_return = np.log(
+            stock_data.data["close"] / stock_data.data["close"].shift(1)
+        ).dropna()
+        model = arch_model(log_return, vol="Garch", p=1, q=1, rescale=False)
+        model_fit = model.fit(disp="off")
+
+        return np.mean(model_fit.conditional_volatility)
 
     @staticmethod
     def calculate_correlation(

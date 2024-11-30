@@ -1,11 +1,13 @@
 import csv
 import json
 
+import numpy as np
 import pandas as pd
 import yfinance as yf
 
 from datetime import datetime
 from dateutil.parser import parse
+from itertools import combinations
 
 from .stock_data import StockData
 
@@ -40,6 +42,36 @@ class Utils:
             tickers = json.load(f)
 
         return tickers
+
+    @staticmethod
+    def load_returns_list(path: str) -> dict[str, np.float64]:
+
+        returns = pd.read_csv(path)
+
+        return {ticker: returns[ticker].values[0] for ticker in returns.keys()}
+
+    @staticmethod
+    def load_volatilities_list(path: str) -> dict[str, np.float64]:
+
+        volatilities = pd.read_csv(path)
+
+        return {
+            ticker: volatilities[ticker].values[0] for ticker in volatilities.keys()
+        }
+
+    @staticmethod
+    def load_correlations_list(
+        path: str, tickers: list[str]
+    ) -> dict[tuple[str, str], np.float64]:
+
+        correlations = pd.read_csv(path)
+
+        return {
+            Utils.make_ordered_pair(a, b): correlations[
+                f"('{a if a <= b else b}', '{b if a <= b else a}')"
+            ].values[0]
+            for a, b in combinations(tickers, r=2)
+        }
 
     @staticmethod
     def find_closer_date(date1: datetime, date2: datetime, ref: datetime) -> datetime:
@@ -101,3 +133,27 @@ class Utils:
     def make_ordered_pair(str1: str, str2: str):
 
         return (str1, str2) if str1 < str2 else (str2, str1)
+
+    @staticmethod
+    def get_opt_sol(
+        J: int,
+        mu_w: float,
+        ret_vec: np.array,
+        cov_mat: np.array,
+    ) -> tuple[np.array, np.float64]:
+
+        one = np.ones(J)
+        ret_vec = ret_vec[:J]
+        cov_mat = cov_mat[:J, :J]
+        inv_cov_mat = np.linalg.inv(cov_mat)
+        a = one @ inv_cov_mat @ one
+        b = ret_vec @ inv_cov_mat @ one
+        c = ret_vec @ inv_cov_mat @ ret_vec
+        d = a * c - b * b
+        w = ((c - b * mu_w) / d) * inv_cov_mat @ one + (
+            (a * mu_w - b) / d
+        ) * inv_cov_mat @ ret_vec
+        var_w = (a * mu_w * mu_w - 2 * b * mu_w + c) / d
+        std_w = np.sqrt(var_w)
+
+        return w, std_w
